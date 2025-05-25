@@ -32,6 +32,8 @@ class TravelHotelService
 
         // Check if API token is configured
         $apiToken = config('services.travelpayouts.api_token');
+        $unsplashKey = config('services.unsplash.access_key');
+
         if (empty($apiToken)) {
             return response()->json([
                 'error' => 'Travelpayouts API token not configured'
@@ -39,7 +41,8 @@ class TravelHotelService
         }
 
         try {
-            $response = Http::withHeaders([
+            // Fetch hotels from Travelpayouts
+            $hotelResponse = Http::withHeaders([
                 'Authorization' => 'Token ' . $apiToken,
             ])->get('https://engine.hotellook.com/api/v2/cache.json', [
                 'location' => $city,
@@ -49,57 +52,48 @@ class TravelHotelService
                 'limit' => 10,
             ]);
 
-            if ($response->ok()) {
-                $data = json_decode($response->body(), true);
+            if (!$hotelResponse->successful()) {
+                return response()->json(['error' => 'Failed to fetch hotels'], 500);
+            }
 
-                if (empty($data) || !isset($data['hotels'])) {
-                    return response()->json([
-                        'error' => 'No hotels found or invalid response'
-                    ], 404);
+            $hotels = $hotelResponse->json();
+
+            // Attach images using Unsplash
+            $hotelsWithImages = array_map(function ($hotel) use ($unsplashKey) {
+                $image = 'https://via.placeholder.com/300x200?text=No+Image';
+
+                if (!empty($hotel['hotelName'])) {
+                    $imageResponse = Http::get('https://api.unsplash.com/search/photos', [
+                        'query' => $hotel['hotelName'],
+                        'client_id' => $unsplashKey,
+                        'per_page' => 1,
+                        'orientation' => 'landscape',
+                    ]);
+
+                    if ($imageResponse->successful() && isset($imageResponse['results'][0]['urls']['regular'])) {
+                        $image = $imageResponse['results'][0]['urls']['regular'];
+                    }
                 }
 
-                // Format response data
-                $hotels = array_map(function ($hotel) {
-                    return [
-                        'hotel_id' => $hotel['hotelId'] ?? null,
-                        'name' => $hotel['hotelName'] ?? 'Unnamed hotel',
-                        'price' => $hotel['price'] ?? 0,
-                        'stars' => $hotel['stars'] ?? 0,
-                        'location' => $hotel['location'] ?? ['lat' => null, 'lon' => null],
-                        'url' => $hotel['url'] ?? null
-                    ];
-                }, $data['hotels']);
+                return [
+                    'hotel_id' => $hotel['hotelId'] ?? null,
+                    'name' => $hotel['hotelName'] ?? 'Unnamed hotel',
+                    'price' => $hotel['price'] ?? 0,
+                    'stars' => $hotel['stars'] ?? 0,
+                    'location' => $hotel['location'] ?? ['lat' => null, 'lon' => null],
+                    'url' => $hotel['url'] ?? null,
+                    'image' => $image,
+                ];
+            }, $hotels);
 
-                return response()->json([
-                    'city' => $city,
-                    'check_in' => $checkInDate,
-                    'check_out' => $checkOutDate,
-                    'hotels' => $hotels,
-                    'total' => count($hotels),
-                    'timestamp' => now()->toDateTimeString()
-                ], 200);
-            }
-
-            // Handle specific HTTP status codes
-            switch ($response->status()) {
-                case 400:
-                    return response()->json([
-                        'error' => 'Bad request: Invalid search parameters'
-                    ], 400);
-                case 401:
-                    return response()->json([
-                        'error' => 'Unauthorized: Invalid API token'
-                    ], 401);
-                case 404:
-                    return response()->json([
-                        'error' => 'No hotels found for this location'
-                    ], 404);
-                default:
-                    return response()->json([
-                        'error' => 'Failed to fetch hotels',
-                        'status' => $response->status()
-                    ], 500);
-            }
+            return response()->json([
+                'city' => $city,
+                'check_in' => $checkInDate,
+                'check_out' => $checkOutDate,
+                'hotels' => $hotelsWithImages,
+                'total' => count($hotelsWithImages),
+                'timestamp' => now()->toDateTimeString()
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Internal server error',

@@ -1,14 +1,13 @@
 <?php
-namespace App\Http\Controllers;
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers; // ✅ Only this line should exist
 
 use App\Services\AviationstackService;
 use Illuminate\Http\Request;
 
 class AviationFlightController extends Controller
 {
-    protected $aviationstack;
+    protected AviationstackService $aviationstack;
 
     public function __construct(AviationstackService $aviationstack)
     {
@@ -17,7 +16,7 @@ class AviationFlightController extends Controller
 
     public function search(Request $request)
     {
-        $from = $request->input('from'); // e.g. JFK
+        $from = $request->input('from');
 
         if (!$from) {
             return response()->json(['error' => 'Missing "from" parameter'], 400);

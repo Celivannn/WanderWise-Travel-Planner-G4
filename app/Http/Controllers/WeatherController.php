@@ -3,22 +3,23 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use App\Services\WeatherService;
 
 class WeatherController extends Controller
 {
+    protected WeatherService $weatherService;
+
+    public function __construct(WeatherService $weatherService)
+    {
+        $this->weatherService = $weatherService;
+    }
+
+    /**
+     * Handle the weather request and delegate to the service.
+     */
     public function getWeather(Request $request)
     {
-        $city = $request->query('city', 'Manila'); // Default city is Manila
-        $apiKey = config('services.openweather.key');
-
-        $response = Http::get("https://api.openweathermap.org/data/2.5/weather", [
-            'q' => $city,
-            'appid' => $apiKey,
-            'units' => 'metric'
-        ]);
-
-        return $response->json();
+        $city = $request->query('city', 'Manila');
+        return $this->weatherService->getWeather($city);
     }
 }

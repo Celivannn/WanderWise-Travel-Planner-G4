@@ -6,16 +6,16 @@ use Illuminate\Support\Facades\Http;
 
 class AviationstackService
 {
-    protected $apiKey;
-    protected $baseUrl;
+    protected string $apiKey;
+    protected string $baseUrl;
 
     public function __construct()
     {
         $this->apiKey = config('services.aviationstack.key');
-        $this->baseUrl = config('services.aviationstack.base_url');
+        $this->baseUrl = rtrim(config('services.aviationstack.base_url'), '/');
     }
 
-    public function searchFlights(string $from)
+    public function searchFlights(string $from): array
     {
         $url = "{$this->baseUrl}/flights";
 
@@ -31,7 +31,7 @@ class AviationstackService
         }
 
         return [
-            'error' => 'Failed to fetch data',
+            'error' => 'Failed to fetch data from Aviationstack API',
             'details' => $response->body(),
         ];
     }

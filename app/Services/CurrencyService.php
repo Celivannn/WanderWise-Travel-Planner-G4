@@ -7,32 +7,21 @@ use Illuminate\Http\JsonResponse;
 
 class CurrencyService
 {
-    /**
-     * Convert currency from one type to another.
-     *
-     * @param string $from Source currency code (default: USD)
-     * @param string $to Target currency code (default: EUR)
-     * @param float $amount Amount to convert (default: 1)
-     * @return JsonResponse
-     */
     public function convert(string $from = 'USD', string $to = 'EUR', float $amount = 1): JsonResponse
     {
-        // Validate currency codes
         if (!$this->isValidCurrencyCode($from) || !$this->isValidCurrencyCode($to)) {
             return response()->json([
                 'error' => 'Invalid currency code provided',
-                'supported_currencies' => ['USD', 'EUR', 'GBP', 'JPY', 'CAD'] // Example list
+                'supported_currencies' => ['USD', 'EUR', 'GBP', 'JPY', 'CAD'] // Example list or fetch dynamically
             ], 400);
         }
 
-        // Validate amount
         if ($amount <= 0) {
             return response()->json([
                 'error' => 'Amount must be greater than zero'
             ], 400);
         }
 
-        // Check if API key is configured
         $apiKey = env('CURRENCY_API_KEY');
         if (empty($apiKey)) {
             return response()->json([
@@ -46,7 +35,6 @@ class CurrencyService
             if ($response->ok()) {
                 $data = $response->json();
 
-                // Check if conversion_rate exists in response
                 if (!isset($data['conversion_rate'])) {
                     return response()->json([
                         'error' => 'Invalid response from currency API'
@@ -54,34 +42,26 @@ class CurrencyService
                 }
 
                 $rate = $data['conversion_rate'];
-                $converted = $rate * $amount;
+                $converted = round($rate * $amount, 4);
 
                 return response()->json([
                     'from' => $from,
                     'to' => $to,
                     'amount' => $amount,
                     'rate' => $rate,
-                    'converted' => round($converted, 4),
+                    'converted' => $converted,
                     'timestamp' => now()->toDateTimeString()
                 ], 200);
             }
 
-            // Handle specific HTTP status codes
-            switch ($response->status()) {
-                case 401:
-                    return response()->json([
-                        'error' => 'Unauthorized: Invalid API key'
-                    ], 401);
-                case 404:
-                    return response()->json([
-                        'error' => 'Currency pair not found'
-                    ], 404);
-                default:
-                    return response()->json([
-                        'error' => 'Failed to fetch currency data',
-                        'status' => $response->status()
-                    ], 500);
-            }
+            return match ($response->status()) {
+                401 => response()->json(['error' => 'Unauthorized: Invalid API key'], 401),
+                404 => response()->json(['error' => 'Currency pair not found'], 404),
+                default => response()->json([
+                    'error' => 'Failed to fetch currency data',
+                    'status' => $response->status()
+                ], 500),
+            };
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Internal server error',
@@ -90,15 +70,8 @@ class CurrencyService
         }
     }
 
-    /**
-     * Validate currency code format.
-     *
-     * @param string $code
-     * @return bool
-     */
     private function isValidCurrencyCode(string $code): bool
     {
-        // Basic validation: 3-letter uppercase code
         return preg_match('/^[A-Z]{3}$/', $code) === 1;
     }
 }
